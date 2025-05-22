@@ -1,60 +1,78 @@
 package main
 
 import (
-	"log"
-	"time"
+	"context"
+	"fmt"
 
-	mcp "github.com/metoro-io/mcp-golang"
-	"github.com/metoro-io/mcp-golang/transport/http"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
-// TimeArgs defines the arguments for the time tool
-type TimeArgs struct {
-	Format string `json:"format" jsonschema:"description=The time format to use"`
-}
-
-// EchoArgs defines the arguments for the echo tool
-type EchoArgs struct {
-	Message string `json:"message" jsonschema:"required,description=The message to echo back"`
-}
-
 func main() {
-	// Create an HTTP transport that listens on /mcp endpoint
-	transport := http.NewHTTPTransport("/mcp").WithAddr(":8080")
-
-	// Create a new server with the transport
-	server := mcp.NewServer(
-		transport,
-		mcp.WithName("simple-mcp-server"),
-		mcp.WithInstructions("A simple MCP server implementation"),
-		mcp.WithVersion("1.0.0"),
+	// Create a new MCP server
+	s := server.NewMCPServer(
+		"Calculator Demo",
+		"1.0.0",
+		server.WithToolCapabilities(false),
+		server.WithRecovery(),
 	)
 
-	// Register a time tool
-	err := server.RegisterTool("time", "Returns the current time in the specified format", func(args TimeArgs) (*mcp.ToolResponse, error) {
-		format := args.Format
-		if format == "" {
-			format = time.RFC3339
-		}
-		log.Printf("Time tool called with format: %s", format)
-		return mcp.NewToolResponse(mcp.NewTextContent(time.Now().Format(format))), nil
-	})
-	if err != nil {
-		log.Fatalf("Failed to register time tool: %v", err)
-	}
+	// Add a calculator tool
+	calculatorTool := mcp.NewTool("calculate",
+		mcp.WithDescription("Perform basic arithmetic operations"),
+		mcp.WithString("operation",
+			mcp.Required(),
+			mcp.Description("The operation to perform (add, subtract, multiply, divide)"),
+			mcp.Enum("add", "subtract", "multiply", "divide"),
+		),
+		mcp.WithNumber("x",
+			mcp.Required(),
+			mcp.Description("First number"),
+		),
+		mcp.WithNumber("y",
+			mcp.Required(),
+			mcp.Description("Second number"),
+		),
+	)
 
-	// Register an echo tool
-	err = server.RegisterTool("echo", "Echoes back the provided message", func(args EchoArgs) (*mcp.ToolResponse, error) {
-		log.Printf("Echo tool called with message: %s", args.Message)
-		return mcp.NewToolResponse(mcp.NewTextContent(args.Message)), nil
+	// Add the calculator handler
+	s.AddTool(calculatorTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Using helper functions for type-safe argument access
+		op, err := request.RequireString("operation")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		x, err := request.RequireFloat("x")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		y, err := request.RequireFloat("y")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		var result float64
+		switch op {
+		case "add":
+			result = x + y
+		case "subtract":
+			result = x - y
+		case "multiply":
+			result = x * y
+		case "divide":
+			if y == 0 {
+				return mcp.NewToolResultError("cannot divide by zero"), nil
+			}
+			result = x / y
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf("%.2f", result)), nil
 	})
-	if err != nil {
-		log.Fatalf("Failed to register echo tool: %v", err)
-	}
 
 	// Start the server
-	log.Println("Starting HTTP server on :8080...")
-	if err := server.Serve(); err != nil {
-		log.Fatalf("Server error: %v", err)
+	if err := server.ServeStdio(s); err != nil {
+		fmt.Printf("Server error: %v\n", err)
 	}
 }

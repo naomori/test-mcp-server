@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "mcpServers": {
+    "calculator": {
+      "description": "Calculator MCP Server",
+      "command": "/Users/naomon/github/test-mcp-server/test-mcp-server"
+    }
+  }
+}
