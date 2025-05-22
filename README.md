@@ -24,19 +24,6 @@ This MCP server provides two simple tools:
 
 ## Example Usage
 
-### Using curl
-
-```bash
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "echo",
-    "args": {
-      "message": "Hello, MCP!"
-    }
-  }'
-```
-
 ### Using the MCP client library
 
 ```go
